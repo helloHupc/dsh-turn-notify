@@ -1,0 +1,42 @@
+# Bundle patch layer: one Host row, no Client half.
+#
+# The plugin is Host-only on purpose. A turn ends on the Host, and the OS
+# notification it raises is visible whether or not the Web GUI is open, focused,
+# or even running — which a notification rendered by the page cannot promise.
+#
+# Every field below is a default. Delete a line to accept the default, or edit
+# it here (or in Settings) to tune the plugin; `volatile()` fields apply to the
+# next turn without reloading the row.
+- insert:
+    - id: dsh-turn-notify
+      name: 'dsh-turn-notify'
+      config:
+        # Master switch. Set to false to silence the plugin without removing it.
+        enabled: true
+        # Which turn outcomes notify. Drop a kind to silence it.
+        notifyOn:
+          - completed
+          - error
+        # auto | terminal-notifier | osascript | notify-send | powershell
+        backend: auto
+        # Quiet period after a turn ends, in ms. A turn that resumes within it
+        # sends no notification, so one task is one notification.
+        settleMs: 800
+        # Turns shorter than this are quick replies, not tasks, and never notify.
+        minTurnMs: 1500
+        # Minimum gap between two notifications for the same Session.
+        cooldownMs: 2000
+        # Maximum length of the assistant-text snippet in the body.
+        maxBodyChars: 180
+        # Also notify for subagent Sessions. Off by default: they are noisy.
+        includeSubagents: false
+        # Play the platform notification sound.
+        sound: true
+        # Show the Session working directory.
+        showCwd: true
+        # App name used by backends without a title field of their own.
+        appName: 'DeepSeek Harness'
+        # macOS sound name.
+        soundName: Glass
+        # auto | en | zh
+        language: auto

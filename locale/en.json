@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Turn notifications",
+    "description": "Sends a system notification when a task finishes, with its outcome, duration, and last reply; failures notify too, so you can look away."
+  }
+}

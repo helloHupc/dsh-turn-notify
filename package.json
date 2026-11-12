@@ -1,0 +1,63 @@
+{
+  "name": "dsh-turn-notify",
+  "version": "0.1.0",
+  "description": "DSH 插件：每当一个任务（turn）结束，用系统通知告诉你结果、耗时和最后一段回复；失败也会通知，无需盯着窗口。",
+  "license": "MIT",
+  "author": "helloHupc",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/helloHupc/dsh-turn-notify.git"
+  },
+  "homepage": "https://github.com/helloHupc/dsh-turn-notify#readme",
+  "bugs": {
+    "url": "https://github.com/helloHupc/dsh-turn-notify/issues"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "deepseek",
+    "plugin",
+    "bundle",
+    "notification",
+    "notify",
+    "turn",
+    "desktop"
+  ],
+  "type": "module",
+  "icon": "./icon.svg",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./notify": "./notify.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "notify.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json",
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.0-rc.2"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.4"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
