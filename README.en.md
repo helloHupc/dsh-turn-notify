@@ -63,11 +63,49 @@ The plugin picks one automatically, and `backend` can force a specific one:
 
 | Platform | Automatic order | Notes |
 | --- | --- | --- |
-| macOS | `terminal-notifier` → `osascript` | `osascript` ships with the OS, so this works out of the box; [terminal-notifier](https://github.com/julienXX/terminal-notifier) adds better grouping and click behaviour |
+| macOS | `osascript` → `terminal-notifier` | `osascript` ships with the OS and posts through Script Editor, whose default is a real banner; [terminal-notifier](https://github.com/julienXX/terminal-notifier) is available if installed |
 | Linux | `notify-send` | needs `libnotify` (`apt install libnotify-bin`) |
 | Windows | `powershell` | native Windows toast notifications |
 
 Every backend receives its arguments as **argv, never through a shell**: a Session title containing a quote, a semicolon, or `$(...)` stays data.
+
+## ⚠️ It only lands in Notification Center, no banner
+
+This is the most common macOS pitfall and it deserves its own section.
+
+**The notification permission belongs to the app that posts it, not to DSH.** macOS does not let a command-line tool post a notification directly; it has to borrow a registered application, and whether the result is a banner or a silent entry in Notification Center is decided by **that application's** alert style. Therefore:
+
+- **DeepSeek Harness is not listed** in System Settings → Notifications because it never posts a notification itself — some other app does;
+- by default this plugin uses `osascript`, so the notification is attributed to **Script Editor**;
+- if you switch to `terminal-notifier`, it is attributed to terminal-notifier's own bundle, whose default style happens to be "Notification Center only".
+
+### Making it appear
+
+Run this in DSH:
+
+```
+/notify-test
+```
+
+It tells you **which app posted that notification** (bundle id included). Then pick one:
+
+**Option A (recommended, nothing to change)**: keep the default `osascript`. It is attributed to Script Editor, which defaults to banners, so it usually pops up already.
+
+**Option B**: if Script Editor is also set to Notification Center only, open its page and switch it to "Banners":
+
+```
+open "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.apple.ScriptEditor2"
+```
+
+With `terminal-notifier`, use:
+
+```
+open "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=fr.julienxx.oss.terminal-notifier"
+```
+
+On that page change the alert style from "Notification Center only" to "Banners" or "Alerts", and make sure a Focus mode is not on.
+
+> Note: `senderBundleId` (default `com.deepseek.dsh`) only changes the **name and icon** terminal-notifier shows, so the notification looks like it came from DeepSeek Harness. It does **not** move the permission — that always follows the app that actually posts.
 
 ## Configuration
 
@@ -87,6 +125,7 @@ Edit the profile's `cordis.patch.yml`, or use **Settings → Plugins → Turn no
 | `showCwd` | `true` | Show the working directory |
 | `appName` | `DeepSeek Harness` | App name for backends without a title field |
 | `soundName` | `Glass` | macOS sound name |
+| `senderBundleId` | `com.deepseek.dsh` | macOS: which app terminal-notifier displays as (name and icon only, not the permission) |
 | `language` | `auto` | `auto` / `en` / `zh` |
 
 ### Why the quiet period exists

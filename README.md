@@ -64,11 +64,49 @@ pnpm add link:/path/to/dsh-turn-notify
 
 | 平台 | 自动顺序 | 说明 |
 | --- | --- | --- |
-| macOS | `terminal-notifier` → `osascript` | `osascript` 系统自带，开箱可用；装了 [terminal-notifier](https://github.com/julienXX/terminal-notifier) 会有更好的分组和点击行为 |
+| macOS | `osascript` → `terminal-notifier` | `osascript` 系统自带，通过「脚本编辑器」发通知，默认就是横幅；装了 [terminal-notifier](https://github.com/julienXX/terminal-notifier) 也可以切换 |
 | Linux | `notify-send` | 需要 `libnotify`（`apt install libnotify-bin`） |
 | Windows | `powershell` | 走 Windows 原生 Toast 通知 |
 
 所有后端都用 **argv 传参**，不经过 shell：Session 标题里带引号、分号、`$(...)` 都只是数据。
+
+## ⚠️ 只进通知中心、不弹出横幅？
+
+这是 macOS 最常见的坑，值得单独说清楚。
+
+**通知的权限属于「发通知的那个 App」，不属于 DSH。** macOS 不允许命令行工具直接发通知，它必须借某个已注册的应用来发，而横幅还是静默只进通知中心，由**那个应用**的提醒样式决定。所以：
+
+- 在「系统设置 → 通知」里**找不到 DeepSeek Harness**，是因为它从来没发过通知——发通知的是别的 App；
+- 本插件默认用 `osascript`，通知归属到 **「脚本编辑器」（Script Editor）**；
+- 如果改用 `terminal-notifier`，归属到 **terminal-notifier** 自己的 bundle，而它的默认样式恰好是「仅在通知中心」。
+
+### 怎么让它弹出来
+
+在 DSH 里执行：
+
+```
+/notify-test
+```
+
+它会直接告诉你**这条通知是通过哪个 App 发的**（含 bundle id）。然后二选一：
+
+**方案 A（推荐，什么都不用改）**：用默认的 `osascript`。它归属「脚本编辑器」，默认就是横幅，通常已经能直接弹出。
+
+**方案 B**：如果「脚本编辑器」也被设成了只进通知中心，打开对应设置页改成「横幅」：
+
+```
+open "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.apple.ScriptEditor2"
+```
+
+用 `terminal-notifier` 的话换成：
+
+```
+open "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=fr.julienxx.oss.terminal-notifier"
+```
+
+在该页把提醒样式从「仅在通知中心」改成「横幅」或「提醒」，并确认没开「专注模式」。
+
+> 顺带一提：`senderBundleId`（默认 `com.deepseek.dsh`）只影响 terminal-notifier 通知上显示的**名字和图标**，让它看起来像 DeepSeek Harness，**不会**把权限迁移过去——权限始终跟着真正发通知的 App。
 
 ## 配置
 
@@ -88,6 +126,7 @@ pnpm add link:/path/to/dsh-turn-notify
 | `showCwd` | `true` | 显示工作目录 |
 | `appName` | `DeepSeek Harness` | 没有标题字段的后端用的应用名 |
 | `soundName` | `Glass` | macOS 提示音名 |
+| `senderBundleId` | `com.deepseek.dsh` | macOS：terminal-notifier 显示为哪个 App（仅名字与图标，不改权限） |
 | `language` | `auto` | `auto` / `en` / `zh` |
 
 ### 为什么有「静默期」

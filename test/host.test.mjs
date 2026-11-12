@@ -206,14 +206,14 @@ test('apply registers the /notify-test command when a registry exists', () => {
   fake.dispose()
 })
 
-test('the /notify-test command reports disabled rather than firing', () => {
+test('the /notify-test command reports disabled rather than firing', async () => {
   const registered = []
   const fake = fakeContext({ services: { commands: { register: (definition) => {
     registered.push(definition)
     return () => {}
   } } } })
   apply(fake.ctx, Config({ enabled: false }))
-  const result = registered[0].handler({ commandId: 'c', agent: { id: 's' }, rawInput: '', attachments: [], signal: new AbortController().signal })
+  const result = await registered[0].handler({ commandId: 'c', agent: { id: 's' }, rawInput: '', attachments: [], signal: new AbortController().signal })
   assert.equal(result.kind, 'error')
   fake.dispose()
 })

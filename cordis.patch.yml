@@ -17,7 +17,12 @@
         notifyOn:
           - completed
           - error
-        # auto | terminal-notifier | osascript | notify-send | powershell
+        # auto | osascript | terminal-notifier | notify-send | powershell
+        #
+        # On macOS, auto prefers osascript: it posts through Script Editor, a
+        # registered app whose default alert style is a real banner. A fresh
+        # terminal-notifier install defaults to "Notification Center only", so
+        # its notifications would pile up in the centre without ever appearing.
         backend: auto
         # Quiet period after a turn ends, in ms. A turn that resumes within it
         # sends no notification, so one task is one notification.
@@ -38,5 +43,9 @@
         appName: 'DeepSeek Harness'
         # macOS sound name.
         soundName: Glass
+        # macOS only: the bundle id terminal-notifier shows as the sender. This
+        # changes the displayed name and icon, not the alert style, which stays
+        # with terminal-notifier's own app in System Settings. Blank disables it.
+        senderBundleId: com.deepseek.dsh
         # auto | en | zh
         language: auto

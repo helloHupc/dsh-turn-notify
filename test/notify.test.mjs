@@ -13,6 +13,8 @@ import {
   escapeAppleScript,
   escapeXml,
   normalizeWhitespace,
+  notificationOwner,
+  notificationSettingsUrl,
   resolveLanguage,
   resolveOptions,
   statusLine,
@@ -211,11 +213,31 @@ test('buildNotification clips the snippet to the configured budget', () => {
   assert.ok(notification.body.endsWith('…'))
 })
 
-test('backendCandidates prefers terminal-notifier on macOS', () => {
-  assert.deepEqual(backendCandidates('darwin', 'auto'), ['terminal-notifier', 'osascript'])
+test('backendCandidates prefers osascript on macOS', () => {
+  // osascript posts through Script Editor, which is a registered app with a
+  // banner-capable default; a fresh terminal-notifier bundle defaults to
+  // "Notification Center only" and never shows a banner until the user changes
+  // it. Preferring the one that works out of the box is the whole point.
+  assert.deepEqual(backendCandidates('darwin', 'auto'), ['osascript', 'terminal-notifier'])
   assert.deepEqual(backendCandidates('linux', 'auto'), ['notify-send'])
   assert.deepEqual(backendCandidates('win32', 'auto'), ['powershell'])
   assert.deepEqual(backendCandidates('aix', 'auto'), [])
+})
+
+test('notificationOwner names the application macOS attributes the banner to', () => {
+  assert.deepEqual(notificationOwner('osascript'), {
+    bundleId: 'com.apple.ScriptEditor2',
+    app: 'Script Editor',
+    appZh: '脚本编辑器',
+  })
+  assert.equal(notificationOwner('terminal-notifier').bundleId, 'fr.julienxx.oss.terminal-notifier')
+  assert.equal(notificationOwner('notify-send'), undefined)
+})
+
+test('notificationSettingsUrl deep-links to one app page', () => {
+  const url = notificationSettingsUrl('com.apple.ScriptEditor2')
+  assert.ok(url.startsWith('x-apple.systempreferences:com.apple.Notifications-Settings.extension?id='))
+  assert.ok(url.endsWith(encodeURIComponent('com.apple.ScriptEditor2')))
 })
 
 test('backendCandidates honours an explicit choice', () => {
@@ -243,13 +265,26 @@ test('backendSpec omits the sound when disabled', () => {
 })
 
 test('backendSpec passes terminal-notifier flags as separate argv entries', () => {
-  const options = resolveOptions({ sound: true })
+  const options = resolveOptions({ sound: true, senderBundleId: 'com.deepseek.dsh' })
   const spec = backendSpec(
     'terminal-notifier',
     { title: 'T', subtitle: 'S', body: 'B', group: 'g' },
     options,
   )
-  assert.deepEqual(spec.args, ['-title', 'T', '-message', 'B', '-group', 'g', '-subtitle', 'S', '-sound', 'Glass'])
+  assert.deepEqual(spec.args, [
+    '-title', 'T',
+    '-message', 'B',
+    '-group', 'g',
+    '-subtitle', 'S',
+    '-sound', 'Glass',
+    '-sender', 'com.deepseek.dsh',
+  ])
+})
+
+test('backendSpec omits -sender when the bundle id is blank', () => {
+  const options = resolveOptions({ senderBundleId: '' })
+  const spec = backendSpec('terminal-notifier', { title: 'T', subtitle: '', body: 'B', group: 'g' }, options)
+  assert.ok(!spec.args.includes('-sender'))
 })
 
 test('backendSpec builds notify-send arguments', () => {

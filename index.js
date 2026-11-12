@@ -34,6 +34,7 @@ import {
   buildNotification,
   clipText,
   normalizeWhitespace,
+  notificationOwner,
   resolveOptions,
 } from './notify.js'
 
@@ -121,6 +122,13 @@ export const Config = z.object({
     .string()
     .default(DEFAULT_OPTIONS.soundName)
     .description('macOS sound name, for example Glass, Ping, or Submarine.')
+    .volatile(),
+  senderBundleId: z
+    .string()
+    .default(DEFAULT_OPTIONS.senderBundleId)
+    .description(
+      'macOS: bundle id terminal-notifier shows as the sender (name and icon only; the alert style stays with its own app). Blank to disable.',
+    )
     .volatile(),
   language: z
     .union(['auto', 'en', 'zh'])
@@ -421,7 +429,7 @@ export function apply(ctx, config) {
         commands.register({
           name: 'notify-test',
           description: 'Send one test notification to check the turn-notify plugin.',
-          handler: () => {
+          handler: async () => {
             const options = currentOptions()
             if (!options.enabled) return { kind: 'error', text: options.messages.disabled }
             const notification = {
@@ -430,17 +438,23 @@ export function apply(ctx, config) {
               body: options.messages.testBody,
               group: options.appName,
             }
-            void chooseBackend(options).then((choice) => {
-              if (choice === undefined) {
-                logger.warn('turn-notify: no notification backend available')
-                return
-              }
-              const spec = backendSpec(choice.backend, notification, options)
-              if (spec !== null) {
-                run(choice.path, spec.args, (error) => logger.warn(`turn-notify: ${choice.backend} failed: ${messageOf(error)}`))
-              }
-            })
-            return { kind: 'success', text: options.messages.testCommand }
+            // Resolve the backend first so the reply can name the application
+            // macOS actually attributed the notification to. A user who sees it
+            // only in Notification Center has to change THAT app's alert style,
+            // and its name is not something they could guess.
+            const choice = await chooseBackend(options)
+            if (choice === undefined) return { kind: 'error', text: options.messages.noBackend }
+            const spec = backendSpec(choice.backend, notification, options)
+            if (spec !== null) {
+              run(choice.path, spec.args, (error) => logger.warn(`turn-notify: ${choice.backend} failed: ${messageOf(error)}`))
+            }
+            const owner = notificationOwner(choice.backend)
+            if (owner === undefined) return { kind: 'success', text: options.messages.testCommand }
+            const localized = options.languageId === 'zh' ? owner.appZh : owner.app
+            return {
+              kind: 'success',
+              text: `${options.messages.testCommand}\n\n${options.messages.testOwner(localized, owner.bundleId)}`,
+            }
           },
         }),
       'dsh-turn-notify: /notify-test command',

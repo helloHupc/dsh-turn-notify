@@ -54,6 +54,7 @@ export const DEFAULT_OPTIONS = {
   showCwd: true,
   appName: 'DeepSeek Harness',
   soundName: 'Glass',
+  senderBundleId: 'com.deepseek.dsh',
   language: 'auto',
 }
 
@@ -71,6 +72,8 @@ export const MESSAGES = {
     testTitle: 'Test notification',
     testBody: 'Notifications work. You will hear from this plugin when a task finishes.',
     testCommand: 'Test notification sent.',
+    testOwner: (app, bundleId) =>
+      `Sent through ${app} (${bundleId}). macOS shows or hides the banner according to THAT app's notification style, so if it only lands in Notification Center, set ${app} to "Banners" in System Settings → Notifications.`,
     disabled: 'Turn notifications are disabled in this plugin configuration.',
     noBackend: 'No notification backend is available on this system.',
   },
@@ -86,6 +89,8 @@ export const MESSAGES = {
     testTitle: '测试通知',
     testBody: '通知可用。之后每个任务结束时都会收到一条通知。',
     testCommand: '测试通知已发送。',
+    testOwner: (app, bundleId) =>
+      `这条通知是通过「${app}」（${bundleId}）发出的。macOS 按「发通知的那个 App」的样式决定横幅还是只进通知中心——如果只进了通知中心，请到「系统设置 → 通知」里把「${app}」改成「横幅」。`,
     disabled: '该插件配置已关闭任务通知。',
     noBackend: '当前系统没有可用的通知后端。',
   },
@@ -163,6 +168,7 @@ export function resolveOptions(config, env = process.env) {
     showCwd: source.showCwd === undefined ? DEFAULT_OPTIONS.showCwd : source.showCwd === true,
     appName: typeof source.appName === 'string' && source.appName.trim() !== '' ? source.appName.trim() : DEFAULT_OPTIONS.appName,
     soundName: typeof source.soundName === 'string' && source.soundName.trim() !== '' ? source.soundName.trim() : DEFAULT_OPTIONS.soundName,
+    senderBundleId: typeof source.senderBundleId === 'string' ? source.senderBundleId.trim() : DEFAULT_OPTIONS.senderBundleId,
     language: typeof source.language === 'string' ? source.language : DEFAULT_OPTIONS.language,
     languageId: id,
     messages: table,
@@ -275,7 +281,60 @@ export function buildNotification({ kind, durationMs, snippet, sessionTitle, cwd
 }
 
 /**
+ * Which macOS application a backend's notification is attributed to.
+ *
+ * macOS decides whether a notification becomes a banner from the *posting*
+ * application's own settings, not from the process that asked for it. A
+ * command-line tool is not an application, so the notification inherits the
+ * bundle that owns it — and that bundle is what the user has to find in
+ * System Settings. This table exists so the plugin can name it instead of
+ * telling the user to search for an app that is not there.
+ *
+ * @param {string} backend - one of {@link BACKENDS}.
+ * @returns {{ bundleId: string, app: string, appZh: string } | undefined} the owner.
+ */
+export function notificationOwner(backend) {
+  switch (backend) {
+    case 'osascript':
+      return { bundleId: 'com.apple.ScriptEditor2', app: 'Script Editor', appZh: '脚本编辑器' }
+    case 'terminal-notifier':
+      return {
+        bundleId: 'fr.julienxx.oss.terminal-notifier',
+        app: 'terminal-notifier',
+        appZh: 'terminal-notifier',
+      }
+    default:
+      return undefined
+  }
+}
+
+/**
+ * The System Settings deep link for one application's notification page.
+ *
+ * macOS accepts a bundle id as the `id` query of the Notifications pane, which
+ * lands on that app's page directly instead of the list the user could not
+ * find the app in.
+ *
+ * @param {string} bundleId - owning application bundle id.
+ * @returns {string} a URL for the `open` command.
+ */
+export function notificationSettingsUrl(bundleId) {
+  return `x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${encodeURIComponent(bundleId)}`
+}
+
+/**
  * List the backends to try, most preferred first.
+ *
+ * macOS order is `osascript` before `terminal-notifier` on purpose.
+ *
+ * A notification can only be shown by an application macOS knows about, and a
+ * command-line tool is not one: the notification is attributed to whichever app
+ * owns the posting binary. `osascript` posts through Script Editor, which ships
+ * with a banner-capable default; `terminal-notifier` is a fresh third-party
+ * bundle whose default alert style is "Notification Center only", so its
+ * notifications silently pile up in the centre and never appear on screen —
+ * exactly the symptom this ordering avoids. Users who prefer terminal-notifier
+ * can select it and switch its style in System Settings once.
  *
  * @param {string} platform - `process.platform`.
  * @param {string} configured - configured backend, or `auto`.
@@ -285,7 +344,7 @@ export function backendCandidates(platform, configured) {
   if (configured !== 'auto') return BACKENDS.includes(configured) ? [configured] : []
   switch (platform) {
     case 'darwin':
-      return ['terminal-notifier', 'osascript']
+      return ['osascript', 'terminal-notifier']
     case 'linux':
       return ['notify-send']
     case 'win32':
@@ -323,6 +382,11 @@ export function backendSpec(backend, notification, options) {
       const args = ['-title', title, '-message', body, '-group', group]
       if (subtitle !== '') args.push('-subtitle', subtitle)
       if (options.sound) args.push('-sound', options.soundName)
+      // `-sender` only changes the name and icon macOS displays; the alert style
+      // still belongs to terminal-notifier's own bundle. It is offered because a
+      // notification that says "DeepSeek Harness" is easier to recognize, not
+      // because it moves the permission.
+      if (options.senderBundleId !== '') args.push('-sender', options.senderBundleId)
       return { command: 'terminal-notifier', args }
     }
     case 'notify-send': {
