@@ -1,6 +1,6 @@
 {
   "name": "dsh-turn-notify",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DSH 插件：每当一个任务（turn）结束，用系统通知告诉你结果、耗时和最后一段回复；失败也会通知，无需盯着窗口。",
   "license": "MIT",
   "author": "helloHupc",
