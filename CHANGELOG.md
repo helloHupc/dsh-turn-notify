@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2
+
+修复重启 DSH 后 `/notify-test` 斜杠命令消失、必须把插件关闭再开启才恢复的问题。
+
+根因：`apply()` 里用 `ctx.get('commands')` 读取命令注册表。冷启动时 Loader 按行顺序挂载，本插件的 `apply` 可能先于提供 `commands` 的那一行执行，此时 `ctx.get` 返回 `undefined`，命令注册分支整段被跳过——命令从未注册。手动关闭再开启时 `commands` 早已就绪，所以又能注册上。该行为已在真实 Cordis 环境复现。
+
+变更：
+
+- 改用 `ctx.inject(['commands'], scope => …)`，由 Cordis 等服务就绪后再执行，服务消失时自动移除。
+- `sessionTitle` / `subprocess` 仍在运行期用 `ctx.get` 惰性读取：它们只在通知触发时访问，那时服务必然已就绪。
+- 新增 3 项冷启动时序测试：服务晚到时命令仍被注册、没有 `commands` 服务时插件照常激活、延迟注册不重复。
+
 ## 0.1.1
 
 修复 macOS 上「通知只进通知中心、不弹出横幅」，以及「系统设置 → 通知」里找不到 DeepSeek Harness 的问题。
