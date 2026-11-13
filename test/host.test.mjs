@@ -15,6 +15,7 @@ function fakeContext({ services = {}, logger = console } = {}) {
   const effects = []
   const warnings = []
   const infos = []
+  const deferred = []
   const ctx = {
     logger: {
       info: (message) => {
@@ -30,6 +31,27 @@ function fakeContext({ services = {}, logger = console } = {}) {
       effects.push(dispose)
       return dispose
     },
+    /**
+     * Mirror Cordis's contract: run the callback once every named service is
+     * available, and keep it deferred until then. A test can therefore apply
+     * the plugin before providing `commands`, which is the cold-start order
+     * that a `ctx.get` lookup would silently miss.
+     */
+    inject(names, callback) {
+      const run = () => {
+        const scope = {
+          effect: ctx.effect,
+          get: ctx.get,
+        }
+        for (const name of names) scope[name] = services[name]
+        callback(scope)
+      }
+      if (names.every((name) => services[name] !== undefined)) {
+        run()
+        return
+      }
+      deferred.push(run)
+    },
     on(event, listener) {
       const set = listeners.get(event) ?? new Set()
       set.add(listener)
@@ -39,9 +61,15 @@ function fakeContext({ services = {}, logger = console } = {}) {
     emit(event, ...args) {
       for (const listener of listeners.get(event) ?? []) listener(...args)
     },
+    /** Provide a service late, then flush the callbacks that were waiting on it. */
+    provide(key, value) {
+      services[key] = value
+      for (const run of deferred.splice(0)) run()
+    },
   }
   return {
     ctx,
+    services,
     warnings,
     infos,
     listeners,
@@ -193,26 +221,57 @@ test('apply disposes its tracker on unload, dropping a settling notice', async (
   assert.equal(fake.warnings.length, 0)
 })
 
-test('apply registers the /notify-test command when a registry exists', () => {
+test('apply registers the /notify-test command once a registry exists', () => {
   const registered = []
-  const fake = fakeContext({ services: { commands: { register: (definition) => {
-    registered.push(definition)
-    return () => {}
-  } } } })
+  const fake = fakeContext()
   apply(fake.ctx, Config({}))
+  fake.ctx.provide('commands', {
+    register: (definition) => {
+      registered.push(definition)
+      return () => {}
+    },
+  })
   assert.equal(registered.length, 1)
   assert.equal(registered[0].name, 'notify-test')
   assert.equal(typeof registered[0].handler, 'function')
   fake.dispose()
 })
 
+test('apply defers the command instead of losing it when commands arrive late', () => {
+  // The cold-start regression: `apply` runs before the row providing
+  // `commands`, so a `ctx.get` lookup found nothing and the command was never
+  // registered until the user toggled the plugin. It must wait instead.
+  const registered = []
+  const fake = fakeContext()
+  apply(fake.ctx, Config({}))
+  assert.equal(registered.length, 0, 'nothing registers before the service exists')
+  fake.ctx.provide('commands', {
+    register: (definition) => {
+      registered.push(definition)
+      return () => {}
+    },
+  })
+  assert.equal(registered.length, 1, 'the deferred callback registers the command')
+  fake.dispose()
+})
+
+test('apply does not require a command registry at all', () => {
+  const fake = fakeContext()
+  assert.doesNotThrow(() => apply(fake.ctx, Config({})))
+  assert.ok(fake.listeners.has('session/event'), 'the turn listener is independent of `commands`')
+  fake.dispose()
+})
+
 test('the /notify-test command reports disabled rather than firing', async () => {
   const registered = []
-  const fake = fakeContext({ services: { commands: { register: (definition) => {
-    registered.push(definition)
-    return () => {}
-  } } } })
+  const fake = fakeContext()
   apply(fake.ctx, Config({ enabled: false }))
+  fake.ctx.provide('commands', {
+    register: (definition) => {
+      registered.push(definition)
+      return () => {}
+    },
+  })
   const result = await registered[0].handler({ commandId: 'c', agent: { id: 's' }, rawInput: '', attachments: [], signal: new AbortController().signal })
   assert.equal(result.kind, 'error')
   fake.dispose()

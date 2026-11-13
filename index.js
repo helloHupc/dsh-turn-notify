@@ -420,13 +420,19 @@ export function apply(ctx, config) {
   )
 
   // A `/notify-test` command gives the user a way to check the plumbing without
-  // waiting for a task to finish. It is optional: a profile without a command
-  // registry simply has no command.
-  const commands = ctx.get('commands')
-  if (commands !== undefined && typeof commands.register === 'function') {
-    ctx.effect(
+  // waiting for a task to finish.
+  //
+  // `ctx.inject` is required here, not `ctx.get`. At cold start the Loader
+  // mounts rows in order, so this plugin's `apply` can run before the row that
+  // provides `commands`; `ctx.get('commands')` would then return `undefined`
+  // and the command would never be registered — it would only appear after the
+  // user toggled the plugin off and on again, once `commands` already existed.
+  // `ctx.inject` defers the callback until the service is available and removes
+  // it when the service goes away, which is the contract this needs.
+  ctx.inject(['commands'], (scope) => {
+    scope.effect(
       () =>
-        commands.register({
+        scope.commands.register({
           name: 'notify-test',
           description: 'Send one test notification to check the turn-notify plugin.',
           handler: async () => {
@@ -459,7 +465,7 @@ export function apply(ctx, config) {
         }),
       'dsh-turn-notify: /notify-test command',
     )
-  }
+  })
 
   // Read once at load so a broken row is reported in the log rather than
   // discovered by a user who never receives a notification.
